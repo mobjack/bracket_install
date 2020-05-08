@@ -1,0 +1,44 @@
+---
+  - name: "Setup Brackets"
+    hosts: localhost
+    connection: local
+    tasks:
+
+    - name: "Install Packages"
+      apt:
+        name: [ 'git',
+                'apt-transport-https',
+                'ca-certificates',
+                'curl',
+                'netcat',
+                'gnupg2',
+                'software-properties-common'
+                ]
+        state: present
+        update_cache: yes
+
+    - name: "Download & Add Docker Keys"
+      apt_key:
+        url: https://download.docker.com/linux/debian/gpg
+        state: present
+
+    - name: "Add Docker Repo"
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/debian {{ansible_distribution_release}} stable
+
+    - name: "Install Docker"
+      apt:
+        name: [ 'docker', 'docker-ce', 'docker-compose', 'docker-ce-cli', 'containerd.io' ]
+        state: present
+        update_cache: yes
+
+    - name: "Setup Docker Network"
+      docker_network:
+        name: bracketapp
+    
+    - name: "Setup Elastic Network Bridge"
+      docker_network:
+        name: elastic
+        driver: bridge
+      
+
