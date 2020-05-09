@@ -1,0 +1,71 @@
+---
+#
+# This file contains the standard configs across all 
+# systems that are managed.
+#
+
+- hosts: all
+
+
+  tasks:
+  - name: "Setup vars"
+    include_vars: vars/base_vars.yml
+
+  - name: "Is NTP installed?"
+    yum: name=ntp state=installed
+    become: true
+  
+  - name: "Is NTP set to auto start?"
+    service: name=ntpd enabled=yes
+    become: true
+
+  - name: "Set NTP Config"
+    template: src=templates/ntp.conf.j2  dest=/etc/ntp.conf
+    become: true
+
+  # Install standard packages here
+  
+  - name: "Are nettools installed?"
+    yum: name=net-tools state=installed
+    become: true
+
+  - name: "Is vim installed?"
+    yum: name=vim state=installed
+    become: true
+
+  - name: "Is nc installed?"
+    yum: name=nc state=installed
+    become: true
+
+  - name: "Is nc git?"
+    yum: name=git state=installed
+    become: true
+
+  - name: "Is tcpdump installed?"
+    yum: name=tcpdump state=installed
+    become: true
+
+  - name: "Is wget installed?"
+    yum: name=wget state=installed
+    become: true
+
+  - name: "Is epel-release installed?"
+    yum: name=epel-release state=installed
+    become: true
+
+  - name: "Is pip installed?"
+    yum: name=python2-pip state=installed
+    become: true
+
+  - name: "Stop rsyslog" 
+    service: state=stopped name=rsyslog
+    become: true
+
+  - name: "Disable rsyslog" 
+    service: enabled=no name=rsyslog
+    become: true
+
+  - name: Install syslog-ng
+    yum: name=syslog-ng state=installed
+    become: true
+
