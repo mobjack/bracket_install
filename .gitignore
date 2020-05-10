@@ -132,4 +132,5 @@ dmypy.json
 gcp_service_key.json
 fleet_setup.ini
 fleet_hosts.ini
+*.bak
 .DS_Store
