@@ -5,6 +5,7 @@ import configparser
 import argparse
 import time
 import json
+import fileinput
 
 import googleapiclient.discovery
 from six.moves import input
@@ -13,16 +14,14 @@ gcpzones = ['us-west1-a','us-west1-b','us-central1-b','us-central1-c','us-centra
             'us-east1-c','us-east1-d','europe-west1-c','europe-west1-d','asia-east1-b',
             'asia-east1-c','asia-northeast1-b','asia-northeast1-c']
 
-configfile = "./hosts/fleet_setup.ini"
-hostsfile = "./hosts/fleet_hosts.ini"
+configfile = './hosts/fleet_setup.ini'
+hostsfile = './hosts/fleet_hosts.ini'
+temp_hostfile = hostsfile + '.temp'
 
-# [START list_instances]
 def list_instances(compute, project, zone):
     result = compute.instances().list(project=project, zone=zone).execute()
     return result['items']
-# [END list_instances]
 
-# [START create_instance]
 def create_instance(compute, project, zone, name, size):
     # Get the latest ubuntu image.
 
@@ -82,6 +81,9 @@ def create_instance(compute, project, zone, name, size):
             }, {
                 'key': 'text',
                 'value': image_caption
+            }, {
+                'vendor': 'leeward',
+                'product': 'brackets'
             }]
         }
     }
@@ -90,9 +92,7 @@ def create_instance(compute, project, zone, name, size):
         project=project,
         zone=zone,
         body=config).execute()
-# [END create_instance]
 
-# [START wait_for_operation]
 def wait_for_operation(compute, project, zone, operation):
     print('Waiting for operation to finish...')
     while True:
@@ -108,9 +108,6 @@ def wait_for_operation(compute, project, zone, operation):
             return result
 
         time.sleep(1)
-# [END wait_for_operation]
-
-
 
 def setupapi(project, zone, instance_name, instance_size, wait=False):
     compute = googleapiclient.discovery.build('compute', 'v1')
@@ -142,10 +139,10 @@ def setupconfig():
             askcontinue = input('Do wish to continue? Y/n: ')
 
     print('\nGreat! Lets get some info.  A few questions:')
-    print('What is your GCP username?  This user should be able to sudo.')
+    print('What is your GCP ssh username?  This user should be able to sudo.')
     useris = input("Username: ")
 
-    print('\nWhat is your google instance ID?')
+    print('\nWhat is your google project ID?')
     print('You can find the id in GCP by clicking the project name like \"My First Project\"')
     idis = input("Google Project Id: ")
 
@@ -188,7 +185,6 @@ def setupconfig():
     with open(configfile, 'w') as cc:
         config.write(cc)
 
-
 def getconfig():
     # Read the config file
     settings = configparser.ConfigParser()
@@ -200,43 +196,49 @@ def getconfig():
         
     return config
 
-def setansiblehosts(apilisthosts): # updates the ansible hosts file
+def setansiblehosts(gcp_name, gcp_inside_ip, gcp_outside_ip): # updates the ansible hosts file
     all_config = getconfig()
-    hwriter = open(hostsfile, 'w')
+    hwriter = open(temp_hostfile, 'a')
 
-    chief_header_trk = True
-    for apiresult in apilisthosts:
-        vmname = apiresult['name']
-        if vmname == 'brackets-admiral':
-            hwriter.write('[{}]\n'.format('fleet-admiral'))
-            admiralstr = 'admiral ansible_host={} ansible_port=22 ansible_user={}\n'.format(all_confg['natip'], all_config['gcp_user'])
-            hwriter.write(admiralstr)
-            hwriter.write('\n')
-        elif '-chief' in str(apiresult['name']):
-            chiefstr = '{} ansible_host={} ansible_port=22 \ 
-                        ansible_user={}\n'.format(vmname, apiresult['natip'], all_config['gcp_user'])
-            if chief_header_trk == True:
-                hwriter.write('[{}]\n'.format('fleet-chief'))
-                hwriter.write(chiefstr)
-                chief_header_trk = False
-            else:
-                hwriter.write(chiefstr)
-        else:
+    with open(temp_hostfile) as th:
+        temp_host_data = th.readlines()
+    
+    if gcp_name == 'brackets-admiral': # write admiral header
+        if '[fleet-admiral]\n' in temp_host_data:
             pass
+        else:
+            hwriter.write('[{}]\n'.format('fleet-admiral'))
+        
+    # write admiral host
+        admiralstr = 'admiral ansible_host={} ansible_port=22 ansible_user={}\n'.format(gcp_outside_ip, all_config['gcp_user'])
+        hwriter.write(admiralstr)
+        
+    else: # write chief header
+        if '[fleet-chiefs]\n' in temp_host_data:
+            pass
+        else:
+            hwriter.write('[{}]\n'.format('fleet-chiefs'))
+        
+        
+        hwriter.write('{} ansible_host={} ansible_port=22 ansible_user={}\n'.format(gcp_name, gcp_outside_ip, all_config['gcp_user']))
 
-    hwriter.close()    
+    hwriter.close()
 
 def main():
-    
+    if os.path.exists(temp_hostfile):
+        os.remove(temp_hostfile)
+
     if os.path.isfile(configfile): 
         apiconfig = getconfig()
     else:
         setupconfig()
         apiconfig = getconfig()
 
+    ### Build Instances ###
+    '''
     # setup one admiral
     setupapi(apiconfig['gcp_project_id'],apiconfig['gcp_zone'],'brackets-admiral','small')
-
+    
     pstart = 1
     pend = int(apiconfig['chief_number']) + 1
     while pstart != pend:
@@ -244,32 +246,36 @@ def main():
         iname = 'brackets-chief' + str(pstart) 
         setupapi(apiconfig['gcp_project_id'],apiconfig['gcp_zone'],iname,'small')
         pstart += 1
+    '''
+    ### Finish Building ###
     
+    ### Query Inventory & Fix Hosts File ###
     compute = googleapiclient.discovery.build('compute', 'v1')
     current_inst = list_instances(compute,apiconfig['gcp_project_id'],apiconfig['gcp_zone'])
-    '''
-    for network in current_inst:
-        for interface in network['networkInterfaces']:
-            for accessconfig in interface['accessConfigs']:
-                natip = accessconfig['natIP']
-                current_inst['natip'] = natip
-        sys.exit()
-    '''
-    setansiblehosts(current_inst) # write new hosts file
-      
-    '''
-    print('Waiting for instances to start')
-    tstart = 1
-    tstop = 100 
-    while tstart != tstop:
-        sys.stdout.write('\r')
-        sys.stdout.write("[%-100s] %d%%" % ('='*tstart, 1*tstart))
-        sys.stdout.flush()
-        time.sleep(1)
-        tstart += 1 
-    print('\n')
+    
+    for instance in current_inst:
+        if instance['name'].startswith('brackets-'):
+            pass
+        else:
+            continue
+
+        # Get name, external nat, if there is not external nat use the internal ip
+        gcp_name = instance['name']
+        inside_ip = instance['networkInterfaces'][0]['networkIP']
+        nat_ip = instance['networkInterfaces'][0]['accessConfigs'][0]['natIP']
+        setansiblehosts(gcp_name, inside_ip, nat_ip) # write new hosts file
+
+        
+    print('updating ansible hosts file')
+    for line in fileinput.input(temp_hostfile):
+        kfline = line.rstrip()
+        print(kfline)
+    
+    os.replace(temp_hostfile, hostsfile)
+    
+    sys.exit()
+    
     print('Configuring Fleet Via Ansible')
-    '''
 
 
 if __name__ == '__main__':
