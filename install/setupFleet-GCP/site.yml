@@ -1,4 +1,2 @@
 ---
-- include: playbooks/base.yml
-- include: playbooks/army.yml
-- include: playbooks/general.yml
+- import_playbook: playbooks/base.yml

@@ -6,66 +6,78 @@
 
 - hosts: all
 
-
   tasks:
-  - name: "Setup vars"
-    include_vars: vars/base_vars.yml
-
-  - name: "Is NTP installed?"
-    yum: name=ntp state=installed
-    become: true
-  
-  - name: "Is NTP set to auto start?"
-    service: name=ntpd enabled=yes
-    become: true
-
-  - name: "Set NTP Config"
-    template: src=templates/ntp.conf.j2  dest=/etc/ntp.conf
-    become: true
-
   # Install standard packages here
-  
-  - name: "Are nettools installed?"
-    yum: name=net-tools state=installed
+  - name: "Installing standard packages?"
+    apt: 
+      pkg: 
+        - build-essential
+        - net-tools 
+        - vim
+        - netcat
+        - git
+        - tcpdump
+        - wget
+        - curl
+        - docker
     become: true
 
-  - name: "Is vim installed?"
-    yum: name=vim state=installed
-    become: true
+  # Check the alt python3 version
+  - name: check alt python version
+    shell: /usr/local/bin/python3.7 --version
+    register: python3_version
+    ignore_errors: yes  # If not installed
+    tags:
+      - python-alt
 
-  - name: "Is nc installed?"
-    yum: name=nc state=installed
-    become: true
+  - name: Create a python install directory if it does not exist
+    file:
+      path: /tmp/python37.src
+      state: directory
+      mode: '0755'
+    when: python3_version.stderr != "" 
+    tags:
+      - python-alt
 
-  - name: "Is nc git?"
-    yum: name=git state=installed
-    become: true
+  - name: Download and unpack alternative python3
+    unarchive:
+      src: https://www.python.org/ftp/python/3.7.3/Python-3.7.3.tgz
+      dest: /tmp/python37.src
+      remote_src: yes
+      keep_newer: yes
+    when: python3_version.stderr != "" 
+    tags:
+      - python-alt
 
-  - name: "Is tcpdump installed?"
-    yum: name=tcpdump state=installed
+  - name: make install alt python3
+    make:
+      chdir: /tmp/python37.src/Python-3.7.3
+      target: altinstall
+      params:
+        UNINST: 1  # Replace
+    when: python3_version.stderr != "" 
     become: true
-
-  - name: "Is wget installed?"
-    yum: name=wget state=installed
-    become: true
-
-  - name: "Is epel-release installed?"
-    yum: name=epel-release state=installed
-    become: true
-
-  - name: "Is pip installed?"
-    yum: name=python2-pip state=installed
-    become: true
-
-  - name: "Stop rsyslog" 
-    service: state=stopped name=rsyslog
-    become: true
-
-  - name: "Disable rsyslog" 
-    service: enabled=no name=rsyslog
-    become: true
-
-  - name: Install syslog-ng
-    yum: name=syslog-ng state=installed
-    become: true
-
+    tags:
+      - python-alt
+    
+  - name: Download get-pip.py
+    get_url:
+      url: https://bootstrap.pypa.io/get-pip.py
+      dest: /tmp/get-pip.py
+      mode: 0664
+    tags:
+      - python-alt
+    
+  - name: Install pip for python3
+    shell: /usr/local/bin/python3.7 /tmp/get-pip.py
+    become: yes
+    tags:
+      - python-alt
+    
+    # We need virtualenv installed under py3 for the virtualenv command to work
+  - pip:
+      name: virtualenv
+      executable: /usr/local/bin/pip3.7
+    become: True
+    tags:
+      - python-alt

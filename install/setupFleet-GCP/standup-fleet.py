@@ -204,20 +204,20 @@ def setansiblehosts(gcp_name, gcp_inside_ip, gcp_outside_ip): # updates the ansi
         temp_host_data = th.readlines()
     
     if gcp_name == 'brackets-admiral': # write admiral header
-        if '[fleet-admiral]\n' in temp_host_data:
+        if '[fleetAdmiral]\n' in temp_host_data:
             pass
         else:
-            hwriter.write('[{}]\n'.format('fleet-admiral'))
+            hwriter.write('[{}]\n'.format('fleetAdmiral'))
         
     # write admiral host
         admiralstr = 'admiral ansible_host={} ansible_port=22 ansible_user={}\n'.format(gcp_outside_ip, all_config['gcp_user'])
         hwriter.write(admiralstr)
         
     else: # write chief header
-        if '[fleet-chiefs]\n' in temp_host_data:
+        if '[fleetChiefs]\n' in temp_host_data:
             pass
         else:
-            hwriter.write('[{}]\n'.format('fleet-chiefs'))
+            hwriter.write('[{}]\n'.format('fleetChiefs'))
         
         
         hwriter.write('{} ansible_host={} ansible_port=22 ansible_user={}\n'.format(gcp_name, gcp_outside_ip, all_config['gcp_user']))
