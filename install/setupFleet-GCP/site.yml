@@ -1,2 +1,9 @@
 ---
-- import_playbook: playbooks/base.yml
+
+- hosts: all
+
+- name: Setting Up Fleet
+  import_playbook: playbooks/base.yml
+
+- name: Setup Admiral
+  import_playbook: playbooks/admiral.yml

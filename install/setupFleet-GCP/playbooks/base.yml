@@ -7,8 +7,24 @@
 - hosts: all
 
   tasks:
+  - name: Update Ubuntu
+    become: True
+    apt:
+      upgrade: yes
+      update_cache: yes
+      cache_valid_time: 86400 #One day
+    run_once: True
+
+  - name: Add Docker GPG key
+    apt_key: url=https://download.docker.com/linux/ubuntu/gpg
+    become: True
+  - name: Add Docker APT repository
+    apt_repository:
+      repo: deb [arch=amd64] https://download.docker.com/linux/{{ansible_distribution|lower}} {{ansible_distribution_release}} stable
+    become: true
+
   # Install standard packages here
-  - name: "Installing standard packages?"
+  - name: Installing standard packages?
     apt: 
       pkg: 
         - build-essential
@@ -19,65 +35,135 @@
         - tcpdump
         - wget
         - curl
-        - docker
-    become: true
+        - openssl
+        - build-essential
+        - libncursesw5-dev 
+        - libgdbm-dev 
+        - libc6-dev
+        - libffi-dev
+        - libssl-dev
+        - zlib1g-dev
+        - tk-dev
+        - apt-transport-https
+        - ca-certificates
+        - gnupg2
+        - software-properties-common
+    become: True
 
-  # Check the alt python3 version
+  
+  - name: Install Docker packages
+    apt:
+      pkg:
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+    become: true
+  
+  - name: Setup brackets user
+    user:
+      name: brackets
+      shell: /bin/bash
+      append: yes
+    become: True
+
+  - name: Set Brackets Dir
+    file:
+      path: /opt/brackets/
+      state: directory 
+      owner: brackets
+      group: brackets
+    become: True
+
   - name: check alt python version
-    shell: /usr/local/bin/python3.7 --version
+    shell: /opt/brackets/bin/python3.7/bin/python3.7 --version
     register: python3_version
     ignore_errors: yes  # If not installed
     tags:
       - python-alt
+    become: True
 
-  - name: Create a python install directory if it does not exist
+  - name: Set bin/python
+    file:
+      path: /opt/brackets/bin/python3.7/
+      state: directory 
+      owner: brackets
+      group: brackets
+    when: python3_version.stderr != "" 
+    become: True
+    become_user: brackets
+
+  - name: Create temp download
     file:
       path: /tmp/python37.src
+      owner: brackets
       state: directory
       mode: '0755'
     when: python3_version.stderr != "" 
     tags:
       - python-alt
-
+    become: True
+    become_user: brackets
+  
   - name: Download and unpack alternative python3
     unarchive:
       src: https://www.python.org/ftp/python/3.7.3/Python-3.7.3.tgz
       dest: /tmp/python37.src
       remote_src: yes
-      keep_newer: yes
     when: python3_version.stderr != "" 
-    tags:
-      - python-alt
-
-  - name: make install alt python3
-    make:
-      chdir: /tmp/python37.src/Python-3.7.3
-      target: altinstall
-      params:
-        UNINST: 1  # Replace
-    when: python3_version.stderr != "" 
-    become: true
-    tags:
-      - python-alt
-    
-  - name: Download get-pip.py
-    get_url:
-      url: https://bootstrap.pypa.io/get-pip.py
-      dest: /tmp/get-pip.py
-      mode: 0664
-    tags:
-      - python-alt
-    
-  - name: Install pip for python3
-    shell: /usr/local/bin/python3.7 /tmp/get-pip.py
-    become: yes
-    tags:
-      - python-alt
-    
-    # We need virtualenv installed under py3 for the virtualenv command to work
-  - pip:
-      name: virtualenv
-      executable: /usr/local/bin/pip3.7
     become: True
-    tags:
-      - python-alt
+    become_user: brackets
+  
+  - name: Compiling python
+    command: ./configure --prefix=/opt/brackets/bin/python3.7/ #--enable-optimizations
+    args:
+      chdir: /tmp/python37.src/Python-3.7.3/
+    when: python3_version.stderr != "" 
+    ignore_errors: yes 
+    become: True
+    become_user: brackets
+    
+  - name: Make python & this will take time
+    command: make
+    args:
+      chdir: /tmp/python37.src/Python-3.7.3/
+    when: python3_version.stderr != "" 
+    become: True
+    become_user: brackets
+
+  - name: Make install python
+    command: make altinstall
+    args:
+      chdir: /tmp/python37.src/Python-3.7.3/
+    when: python3_version.stderr != "" 
+    become: True
+    become_user: brackets
+  
+  - name: Brackets python symlink
+    file:
+      src: /opt/brackets/bin/python3.7/bin/python3.7
+      dest: /opt/brackets/bin/python3.7/bin/python
+      owner: brackets
+      group: brackets
+      state: link
+    when: python3_version.stderr != "" 
+    become: True
+    become_user: brackets
+    
+  - name: Brackets pip symlink
+    file:
+      src: /opt/brackets/bin/python3.7/bin/pip3.7
+      dest: /opt/brackets/bin/python3.7/bin/pip
+      owner: brackets
+      group: brackets
+      state: link
+    when: python3_version.stderr != "" 
+    become: True
+    become_user: brackets
+
+  - name: Clean Up Brackets Tmp
+    file:
+      path: /tmp/python37.src/
+      state: absent 
+    become: true
+    when: python3_version.stderr != "" 
+ 

@@ -1,69 +1,11 @@
 ---
-
-#
-
-- hosts: lab-general
-
+- hosts: admiral
 
   tasks:
-  - name: "Setup vars"
-    include_vars: vars/base_vars.yml
-
-  - name: "Set master syslog Config"
-    template: src=templates/syslog-ng-master.conf.j2  dest=/etc/syslog-ng/syslog-ng.conf
-    become: true
-    notify:
-    - restart syslog-ng
-
-  - name: Open Syslog Tcp
-    firewalld: port=514/tcp permanent=true state=enabled
-    become: true
-
-  - name: Open Syslog Udp
-    firewalld: port=514/udp permanent=true state=enabled
-    become: true
-    
-    # Setup google sdk
-  - name: "Setup Google SDK Config"
-    template: src=templates/google-repo.j2  dest=/etc/yum.repos.d/google-cloud-sdk.repo
-    become: true
-
-  - name: "Is Google SDK installed?"
-    yum: name=google-cloud-sdk state=installed
-    become: true
-
-  - name: "Is pip google-api-python-client installed?"
-    pip:  name=google-api-python-client
-    become: true
-
-    # Make a general a proxy server
-  - name: "Is squid installed?"
-    yum: name=squid state=installed
-    become: true
-
-  - name: "Is squid autostart?"
-    service: name=squid enabled=yes
-    become: true
-
-  - name: "Set squid config" 
-    template: src=templates/squid.conf.j2  dest=/etc/squid/squid.conf
-    become: true
-    notify:
-    - restart squid
-
-  user:
-  - name: "firewalleric"
-    generate_ssh_key: yes
-    ssh_key_bits: 2048
-    ssh_key_file: .ssh/id_rsa
-    become: true
-
-
-  handlers:
-  - name: restart syslog-ng
-    service: name=syslog-ng state=restarted
-    become: true
-
-  - name: restart squid
-    service: name=squid state=restarted
-    become: true
+  - name: Initialize Docker Swarm
+    docker_swarm:
+      state: present
+    run_once: true
+    tags: swarm
+  
+  #- name: "Setting Up Admiral with Docker Swarm"

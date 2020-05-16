@@ -1,0 +1,27 @@
+---
+#
+# This file contains the standard configs across all 
+# systems that are managed.
+#
+
+- hosts: all
+
+  tasks:
+  # Install standard packages here
+  - name: Clean Up Brackets Dir
+    file:
+      path: /tmp/python37.src/
+      state: absent 
+    become: true
+
+  - name: Clean Up Brackets python 
+    file:
+      path: /opt/brackets/bin/python37/
+      state: absent 
+    become: true
+    
+  - name: Clean Up Brackets python 
+    file:
+      path: /opt/brackets/bin/python3.7/
+      state: absent 
+    become: true

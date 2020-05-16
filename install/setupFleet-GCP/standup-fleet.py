@@ -126,9 +126,7 @@ def setupapi(project, zone, instance_name, instance_size, wait=False):
 
 
 def setupconfig():
-    print ("""\nThis script is entended to spin up a cloud instance
-           of the brackets in the cloud, on a google cloud instance. 
-           The setup is fast and automatic.""")
+    print ("""\nDo you wish to attempt to build Brackets on GCP?""")
     askcontinue = input('Do wish to continue? Y/n: ')
     while askcontinue != "Y":
         if askcontinue == "Y":
@@ -194,7 +192,7 @@ def getconfig():
     for key in settings['admiral']:
         config.update({key: settings['admiral'][key]})
         
-    return config
+    return config # returns dict
 
 def setansiblehosts(gcp_name, gcp_inside_ip, gcp_outside_ip): # updates the ansible hosts file
     all_config = getconfig()
@@ -224,35 +222,47 @@ def setansiblehosts(gcp_name, gcp_inside_ip, gcp_outside_ip): # updates the ansi
 
     hwriter.close()
 
+def buildinstances(project_id, zone, chief_count):
+    ''' Build Instances '''
+    # setup one admiral
+    setupapi(project_id, zone, 'brackets-admiral','small')
+    
+    # Build Chiefs
+    pstart = 1
+    pend = int(chief_count) + 1
+    while pstart != pend:
+        print('Working on {}'.format(pstart))
+        iname = 'brackets-chief' + str(pstart) 
+        setupapi(project_id, zone,iname,'small')
+        pstart += 1
+    ### Finish Building ###
+
+def show_hosts(showfile=hostsfile):
+    for line in fileinput.input(temp_hostfile):
+        kfline = line.rstrip()
+        print(kfline)
+ 
 def main():
+
+    # Clean up old temp files
     if os.path.exists(temp_hostfile):
         os.remove(temp_hostfile)
 
+    # Load the config file or make a new one...
     if os.path.isfile(configfile): 
         apiconfig = getconfig()
     else:
         setupconfig()
         apiconfig = getconfig()
 
-    ### Build Instances ###
-    '''
-    # setup one admiral
-    setupapi(apiconfig['gcp_project_id'],apiconfig['gcp_zone'],'brackets-admiral','small')
-    
-    pstart = 1
-    pend = int(apiconfig['chief_number']) + 1
-    while pstart != pend:
-        print('Working on {}'.format(pstart))
-        iname = 'brackets-chief' + str(pstart) 
-        setupapi(apiconfig['gcp_project_id'],apiconfig['gcp_zone'],iname,'small')
-        pstart += 1
-    '''
-    ### Finish Building ###
-    
-    ### Query Inventory & Fix Hosts File ###
+    # Make some instances
+    buildinstances(apiconfig['gcp_project_id'], apiconfig['gcp_zone'], apiconfig['chief_number'])
+    # Fix hosts file
+    ### Query Inventory & Fix Hosts File With IP ###
     compute = googleapiclient.discovery.build('compute', 'v1')
     current_inst = list_instances(compute,apiconfig['gcp_project_id'],apiconfig['gcp_zone'])
     
+    # Skip any non brackets instances
     for instance in current_inst:
         if instance['name'].startswith('brackets-'):
             pass
@@ -265,12 +275,12 @@ def main():
         nat_ip = instance['networkInterfaces'][0]['accessConfigs'][0]['natIP']
         setansiblehosts(gcp_name, inside_ip, nat_ip) # write new hosts file
 
-        
-    print('updating ansible hosts file')
-    for line in fileinput.input(temp_hostfile):
-        kfline = line.rstrip()
-        print(kfline)
+    print('BEFORE...')
+    show_hosts(temp_hostfile)
+    print('AFTER...')
+    show_hosts(hostfile)
     
+    # Moving tempfile to  ansible hostsfile
     os.replace(temp_hostfile, hostsfile)
     
     sys.exit()
