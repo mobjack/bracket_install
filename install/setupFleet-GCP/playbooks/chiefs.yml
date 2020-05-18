@@ -1,0 +1,40 @@
+---
+
+- hosts: admiral
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+
+  tasks:
+  - name: Get swarm key for chiefs
+    shell: docker swarm join-token worker | grep token | awk '{print $5}'
+    register: docker_swarm_key_var
+    become: yes
+    become_user: brackets
+
+  - name: Get swarm ip
+    shell: docker swarm join-token worker | grep token | awk '{print $6}'
+    register: docker_swarm_ip_var
+    become: yes
+    become_user: brackets 
+
+  - name: Set Admiral Facts
+    set_fact:
+      docker_swarm_key:  "{{ docker_swarm_key_var.stdout }}"
+      docker_swarm_ip: "{{ docker_swarm_ip_var.stdout }}"  
+      
+- hosts: fleetChiefs
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    chief_ip_var: hostvars[inventory_hostname]['ansible_default_ipv4']['address']
+    get_docker_key: "{{ hostvars['admiral']['docker_swarm_key'] }}"
+    get_docker_ip: "{{ hostvars['admiral']['docker_swarm_ip'] }}"
+
+  tasks:
+  - name: Join chief to swarm cluster as a worker
+    docker_swarm:
+      state: join
+      advertise_addr: "{{ chief_ip_var }}"
+      join_token: "{{ get_docker_key }}"
+      remote_addrs: [ "{{ get_docker_ip }}" ]
+  become: yes
+  become_user: brackets

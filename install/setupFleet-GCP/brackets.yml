@@ -1,0 +1,12 @@
+---
+
+- hosts: all
+
+- name: Setting Up Fleet
+  import_playbook: playbooks/crew.yml
+
+- name: Setup Admiral
+  import_playbook: playbooks/admiral.yml
+
+- name: Setup Chiefs
+  import_playbook: playbooks/chiefs.yml

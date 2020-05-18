@@ -1,0 +1,102 @@
+---
+#
+# This file contains the standard configs across all 
+# systems that are managed.
+#
+
+- hosts: all
+
+  tasks:
+  - name: Update Ubuntu
+    become: yes
+    apt:
+      upgrade: yes
+      update_cache: yes
+      cache_valid_time: 86400 #One day
+    run_once: yes
+
+  - name: Add Docker GPG key
+    apt_key: url=https://download.docker.com/linux/ubuntu/gpg
+    become: yes
+
+  - name: Add Docker APT repository
+    apt_repository:
+      repo: deb [arch=amd64] https://download.docker.com/linux/{{ansible_distribution|lower}} {{ansible_distribution_release}} stable
+    become: yes
+
+  # Install standard packages here
+  - name: Installing standard packages?
+    apt: 
+      pkg: 
+        - build-essential
+        - net-tools 
+        - vim
+        - netcat
+        - git
+        - tcpdump
+        - wget
+        - curl
+        - openssl
+        - software-properties-common
+    become: yes
+
+  - name: Check Python version
+    shell: /usr/bin/python3 -V
+    register: python3_version
+    ignore_errors: yes  # If not installed
+
+  - name: Install Python If Not Present
+    apt:
+      pkg:
+        - python3
+        - python3-pip
+    become: yes
+
+  - name: Update Pip
+    command: pip3 install --upgrade pip
+    become: yes
+  
+  - name: Instal docker pip package
+    pip: 
+      name: docker
+    become: yes
+
+  - name: Is Docker installed?
+    shell: /usr/bin/docker version | grep Version | head -1 | awk '{print $2}'
+    register: docker_version
+    ignore_errors: yes  # If not installed
+  
+  - name: Install Docker
+    apt:
+      pkg:
+        - docker-ce=5:19.03.8~3-0~ubuntu-bionic
+        - docker-ce-cli=5:19.03.8~3-0~ubuntu-bionic 
+        - containerd.io       
+    when: docker_version.stderr != "" 
+    become: yes
+
+  - name: Setup brackets user
+    user:
+      name: brackets
+      shell: /bin/bash
+      append: yes
+    become: yes
+
+  - name: Update docker user group 
+    user:
+      name: "{{ item }}"
+      groups: docker
+      append: yes
+    become: yes
+    loop:
+      - "{{ ansible_user }}"
+      - brackets
+
+
+  - name: Set Brackets Dir
+    file:
+      path: /opt/brackets/
+      state: directory 
+      owner: brackets
+      group: brackets
+    become: yes

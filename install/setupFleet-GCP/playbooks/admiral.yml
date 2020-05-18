@@ -1,11 +1,34 @@
 ---
 - hosts: admiral
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    admiral_ip: hostvars[inventory_hostname]['ansible_default_ipv4']['address']
 
   tasks:
   - name: Initialize Docker Swarm
     docker_swarm:
       state: present
-    run_once: true
     tags: swarm
+    become: yes
+    become_user: brackets
   
-  #- name: "Setting Up Admiral with Docker Swarm"
+  - name: Get swarm key for chiefs
+    shell: docker swarm join-token worker | grep token | awk '{print $5}'
+    register: docker_swarm_key
+    become: yes
+    become_user: brackets
+
+  - name: Get swarm ip
+    shell: docker swarm join-token worker | grep token | awk '{print $6}'
+    register: docker_swarm_ip
+    become: yes
+    become_user: brackets
+
+  - name: Join admiral to cluster as a worker
+    docker_swarm:
+      state: join
+      advertise_addr: "{{ admiral_ip }}"
+      join_token: "{{ docker_swarm_key }}"
+      remote_addrs: [ "{{ docker_swarm_ip }}" ]
+    become: yes
+    become_user: brackets

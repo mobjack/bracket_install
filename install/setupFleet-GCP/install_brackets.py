@@ -257,6 +257,7 @@ def main():
 
     # Make some instances
     buildinstances(apiconfig['gcp_project_id'], apiconfig['gcp_zone'], apiconfig['chief_number'])
+
     # Fix hosts file
     ### Query Inventory & Fix Hosts File With IP ###
     compute = googleapiclient.discovery.build('compute', 'v1')
@@ -275,17 +276,16 @@ def main():
         nat_ip = instance['networkInterfaces'][0]['accessConfigs'][0]['natIP']
         setansiblehosts(gcp_name, inside_ip, nat_ip) # write new hosts file
 
-    print('BEFORE...')
-    show_hosts(temp_hostfile)
-    print('AFTER...')
-    show_hosts(hostfile)
+    print('Updating new brackets hosts file')
+    show_hosts(hostsfile)
     
     # Moving tempfile to  ansible hostsfile
     os.replace(temp_hostfile, hostsfile)
     
-    sys.exit()
     
-    print('Configuring Fleet Via Ansible')
+    print('Configure crew via ansible with this command: ')
+    print('ansible-playbook -i ./hosts/fleet_hosts.ini brackets.yml')
+
 
 
 if __name__ == '__main__':
