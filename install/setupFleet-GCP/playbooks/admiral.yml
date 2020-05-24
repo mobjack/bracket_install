@@ -5,6 +5,9 @@
     admiral_ip: hostvars[inventory_hostname]['ansible_default_ipv4']['address']
 
   tasks:
+  - name: Set docker login
+    include_vars: vars/bracket_vars.yml
+
   - name: Initialize Docker Swarm
     docker_swarm:
       state: present
@@ -12,7 +15,7 @@
     become: yes
     become_user: brackets
   
-  - name: Get swarm key for chiefs
+  - name: Get swarm key for later
     shell: docker swarm join-token worker | grep token | awk '{print $5}'
     register: docker_swarm_key
     become: yes
@@ -32,3 +35,8 @@
       remote_addrs: [ "{{ docker_swarm_ip }}" ]
     become: yes
     become_user: brackets
+
+  - name: Docker Login
+    docker_login:
+    username: " {{ docker_user }}"
+    password: " {{ docker_login }}"

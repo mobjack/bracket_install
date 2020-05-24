@@ -8,7 +8,8 @@ import json
 import fileinput
 
 import googleapiclient.discovery
-from six.moves import input
+#from six.moves import input
+from colorama import Fore, Back, Style
 
 gcpzones = ['us-west1-a','us-west1-b','us-central1-b','us-central1-c','us-central1-f',
             'us-east1-c','us-east1-d','europe-west1-c','europe-west1-d','asia-east1-b',
@@ -124,62 +125,61 @@ def setupapi(project, zone, instance_name, instance_size, wait=False):
 
     print('Instance {} is being created'.format(instance_name))
 
+def setupconfig(gcp=False):
+    ids = ''
+    zoneis = ''
+    cheifcnt = int()
+    chiefsize = 'small'
 
-def setupconfig():
-    print ("""\nDo you wish to attempt to build Brackets on GCP?""")
-    askcontinue = input('Do wish to continue? Y/n: ')
+    askcontinue = input('Installing Brackets...' + Fore.GREEN + 'Do wish to continue? Y|n: ' + Style.RESET_ALL)
     while askcontinue != "Y":
         if askcontinue == "Y":
             pass
         elif askcontinue == "n":
             sys.exit("Exiting")
         else:
-            askcontinue = input('Do wish to continue? Y/n: ')
+            askcontinue = input(Fore.GREEN + 'Do wish to continue? Y/n: ' + Style.RESET_ALL)
 
-    print('\nGreat! Lets get some info.  A few questions:')
-    print('What is your GCP ssh username?  This user should be able to sudo.')
-    useris = input("Username: ")
+    print(Fore.GREEN + '\nGreat! Lets get some info.  A few questions:')
+    print('What is your ssh username?  This user should be able to sudo.')
+    useris = input("Username: " + Style.RESET_ALL)
 
-    print('\nWhat is your google project ID?')
-    print('You can find the id in GCP by clicking the project name like \"My First Project\"')
-    idis = input("Google Project Id: ")
+    if gcp == True:
+        print('\nWhat is your google project ID?')
+        print('You can find the id in GCP by clicking the project name like \"My First Project\"')
+        idis = input("Google Project Id: ")
 
-    print('\nWhat zone do you want these instances to land?:')
-    print('See: https://cloud.google.com/compute/docs/regions-zones/regions-zones')
-    print('Options are:') 
-    print(gcpzones)
-    print('\n')
-    zoneis = input("Zone: ")
+        print('\nWhat zone do you want these instances to land?:')
+        print('See: https://cloud.google.com/compute/docs/regions-zones/regions-zones')
+        print('Options are:') 
+        print(gcpzones)
+        print('\n')
+        zoneis = input("Zone: ")
 
-    print('\nThis script will spin up a single admiral and several chiefs')
+    print(Fore.GREEN + '\nThis script will configure single admiral and/or several chiefs' + Style.RESET_ALL)
 
     chieftrk = False
     chiefcnt = 0
     while chieftrk == False:
         try:
-            chiefcnt = int(input("How many chiefs/workers do you want to create? [2-20]: "))
+            chiefcnt = int(input("How many chiefs/workers are there? [1-20 or more]: "))
             if 2 <= chiefcnt <= 20:
                 chieftrk = True
         except ValueError:
             print('Error: Numbers Only\n')
-    chiefsize = 'small'
-    
+
     config = configparser.ConfigParser()
-    config['admiral'] = {'gcp_user': useris,
-                       'gcp_project_id': idis,
-                       'gcp_zone': zoneis,
-                       'chief_number': chiefcnt,
-                       'chief_size': chiefsize
-                       }
-    '''
-    # This is for testing
-    config['admiral'] = {'gcp_user': 'firewalleric@gmail.com',
-                         'gcp_project_id': 'regal-autonomy-143002',
-                         'gcp_zone': 'us-central1-c',
-                         'chief_number': 3,
-                         'chief_size': 'small'
-                        } 
-    '''
+    if gcp == True:
+        config['admiral'] = {'ssh_user': useris,
+                            'gcp_project_id': idis,
+                            'gcp_zone': zoneis,
+                            'chief_number': chiefcnt,
+                            'chief_size': chiefsize
+                             }
+    else:
+        config['admiral'] = {'ssh_user': useris,
+                            'chief_number': chiefcnt}
+
     with open(configfile, 'w') as cc:
         config.write(cc)
 
@@ -194,21 +194,48 @@ def getconfig():
         
     return config # returns dict
 
-def setansiblehosts(gcp_name, gcp_inside_ip, gcp_outside_ip): # updates the ansible hosts file
+def set_fleet_hosts():
+    all_config = getconfig()
+    hwriter = open(temp_hostfile, 'w')
+
+    admiral_ip = input(Fore.GREEN + "What IP or Hostname of Admiral: " + Style.RESET_ALL)
+    hwriter.write('[{}]\n'.format('fleetAdmiral'))
+    admiralstr = 'admiral ansible_host={} ansible_port=22 ansible_user={}\n'.format(admiral_ip, all_config['ssh_user'])
+    hwriter.write(admiralstr)
+    hwriter.write('\n')
+
+    print(Fore.BLUE + '\nConfiguring Chiefs....' + Style.RESET_ALL)
+
+    if int(all_config['chief_number']) == 0:
+        return(None)
+    
+    start_count = 1
+    hwriter.write('[{}]\n'.format('fleetChiefs'))
+    while start_count <= int(all_config['chief_number']):
+        brack_name = "brackets-chief" + str(start_count)
+        print(Fore.GREEN + "Configuring {}".format(brack_name))
+        chief_host = input("What is the ip or hostname of {}? : ".format(brack_name) + Style.RESET_ALL)
+        hwriter.write('{} ansible_host={} ansible_port=22 ansible_user={}\n'.format(brack_name, chief_host, all_config['ssh_user']))
+        start_count += 1
+
+    hwriter.close()
+    os.replace(temp_hostfile, hostsfile)
+
+def set_gcp_hosts(brak_name, brak_ssh_iphost): # updates the ansible hosts file
     all_config = getconfig()
     hwriter = open(temp_hostfile, 'a')
 
     with open(temp_hostfile) as th:
         temp_host_data = th.readlines()
     
-    if gcp_name == 'brackets-admiral': # write admiral header
+    if brak_name == 'brackets-admiral': # write admiral header
         if '[fleetAdmiral]\n' in temp_host_data:
             pass
         else:
             hwriter.write('[{}]\n'.format('fleetAdmiral'))
         
     # write admiral host
-        admiralstr = 'admiral ansible_host={} ansible_port=22 ansible_user={}\n'.format(gcp_outside_ip, all_config['gcp_user'])
+        admiralstr = 'admiral ansible_host={} ansible_port=22 ansible_user={}\n'.format(brak_ssh_iphost, all_config['ssh_user'])
         hwriter.write(admiralstr)
         
     else: # write chief header
@@ -218,9 +245,10 @@ def setansiblehosts(gcp_name, gcp_inside_ip, gcp_outside_ip): # updates the ansi
             hwriter.write('[{}]\n'.format('fleetChiefs'))
         
         
-        hwriter.write('{} ansible_host={} ansible_port=22 ansible_user={}\n'.format(gcp_name, gcp_outside_ip, all_config['gcp_user']))
+        hwriter.write('{} ansible_host={} ansible_port=22 ansible_user={}\n'.format(brak_name, brak_ssh_iphost, all_config['ssh_user']))
 
     hwriter.close()
+    os.replace(temp_hostfile, hostsfile)
 
 def buildinstances(project_id, zone, chief_count):
     ''' Build Instances '''
@@ -238,27 +266,13 @@ def buildinstances(project_id, zone, chief_count):
     ### Finish Building ###
 
 def show_hosts(showfile=hostsfile):
-    for line in fileinput.input(temp_hostfile):
+    print('    ########### Brackets Ansible Hosts File ###############')
+    for line in fileinput.input(showfile):
         kfline = line.rstrip()
-        print(kfline)
- 
-def main():
-
-    # Clean up old temp files
-    if os.path.exists(temp_hostfile):
-        os.remove(temp_hostfile)
-
-    # Load the config file or make a new one...
-    if os.path.isfile(configfile): 
-        apiconfig = getconfig()
-    else:
-        setupconfig()
-        apiconfig = getconfig()
-
-    # Make some instances
-    buildinstances(apiconfig['gcp_project_id'], apiconfig['gcp_zone'], apiconfig['chief_number'])
-
-    # Fix hosts file
+        print('    ' + kfline)
+    print('    #######################################################')
+        
+def update_gcp_hosts(apiconfig):
     ### Query Inventory & Fix Hosts File With IP ###
     compute = googleapiclient.discovery.build('compute', 'v1')
     current_inst = list_instances(compute,apiconfig['gcp_project_id'],apiconfig['gcp_zone'])
@@ -271,20 +285,92 @@ def main():
             continue
 
         # Get name, external nat, if there is not external nat use the internal ip
-        gcp_name = instance['name']
-        inside_ip = instance['networkInterfaces'][0]['networkIP']
+        brack_name = instance['name']
+        access_ip = instance['networkInterfaces'][0]['networkIP']
         nat_ip = instance['networkInterfaces'][0]['accessConfigs'][0]['natIP']
-        setansiblehosts(gcp_name, inside_ip, nat_ip) # write new hosts file
+        set_gcp_hosts(brack_name, access_ip) # write new hosts file
 
     print('Updating new brackets hosts file')
     show_hosts(hostsfile)
     
     # Moving tempfile to  ansible hostsfile
     os.replace(temp_hostfile, hostsfile)
-    
-    
-    print('Configure crew via ansible with this command: ')
-    print('ansible-playbook -i ./hosts/fleet_hosts.ini brackets.yml')
+ 
+def menu_option():
+    max_option=6
+    options = range(1,max_option)
+    selection = int()
+
+    while True:
+        print()
+        print(Fore.GREEN + 'Brackets Menu: Select Option' + Style.RESET_ALL)
+        print('  1 - Install Brackets on 1 or more Ubuntu-18 VMs, instances or servers')
+        print('  2 - Install Brackets on GCP from scratch (spin up & install')
+        print('  3 - View active hosts file')
+        print('  4 - Update GCP nodes')
+        print('  5 - Exit Now')
+        print()
+        
+        selection = int(input(Fore.GREEN + 'Select Option: ' + Style.RESET_ALL))
+        if selection in options:
+            return(selection)
+        else:
+            print(Fore.RED + "Error: Please select option {}".format(list(options)) + Style.RESET_ALL)
+            
+def main():
+    # Clean up any old temp files
+    if os.path.exists(temp_hostfile):
+        os.remove(temp_hostfile)
+
+    set_option = int()
+    try:
+        while True:
+            set_option = menu_option() 
+
+            if set_option == 1:
+                print('Running setup')
+                if os.path.isfile(configfile): 
+                    print(Fore.YELLOW + 'WARNING' + Fore.BLUE)
+                    show_hosts()
+                    print(Fore.YELLOW + 'Found existing brackets hosts')
+                    overwrite = input('Do you want to overwrite this? y|n: ' + Style.RESET_ALL)
+
+                    if overwrite == 'y':
+                        setupconfig()
+                        set_fleet_hosts()
+                        
+                    apiconfig = getconfig()
+                else:
+                    setupconfig()
+                    apiconfig = getconfig()
+            elif set_option == 2:
+                print("Setup and install on gcp")
+                setupconfig(gcp=True)
+                apiconfig = getconfig()
+                buildinstances(apiconfig['gcp_project_id'], apiconfig['gcp_zone'], apiconfig['chief_number'])
+                update_gcp_hosts(apiconfig)
+            elif set_option == 3:
+                show_hosts(hostsfile)
+            elif set_option == 4:
+                print('Update gcp ansible hosts')
+                #apiconfig = getconfig()
+                update_gcp_hosts(getconfig())
+            elif set_option == 5:
+                print('Option 5: Exit')
+                sys.exit()
+            else:
+                pass
+               
+    except KeyboardInterrupt:
+        sys.exit('\nExit...')
+
+    sys.exit()
+
+    # Make some instances
+    #buildinstances(apiconfig['gcp_project_id'], apiconfig['gcp_zone'], apiconfig['chief_number'])
+
+    #print('Configure crew via ansible with this command: ')
+    #print('ansible-playbook -i ./hosts/fleet_hosts.ini brackets.yml')
 
 
 

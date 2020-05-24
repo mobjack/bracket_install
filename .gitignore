@@ -134,3 +134,4 @@ fleet_setup.ini
 fleet_hosts.ini
 *.bak
 .DS_Store
+bracket_vars.yml
