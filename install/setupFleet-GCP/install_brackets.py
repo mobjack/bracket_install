@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 
 import os, sys
-import configparser
-import argparse
 import time
 import json
+import argparse
 import fileinput
+import subprocess
+import configparser
 
+from copy import deepcopy
 import googleapiclient.discovery
-#from six.moves import input
 from colorama import Fore, Back, Style
+#from six.moves import input
 
 gcpzones = ['us-west1-a','us-west1-b','us-central1-b','us-central1-c','us-central1-f',
             'us-east1-c','us-east1-d','europe-west1-c','europe-west1-d','asia-east1-b',
@@ -17,7 +19,9 @@ gcpzones = ['us-west1-a','us-west1-b','us-central1-b','us-central1-c','us-centra
 
 configfile = './hosts/fleet_setup.ini'
 hostsfile = './hosts/fleet_hosts.ini'
+ansible_python = '/usr/bin/python3' # Ansible is python too and needs the system python not venv
 temp_hostfile = hostsfile + '.temp'
+fleet_spinup_pause = 30
 
 def list_instances(compute, project, zone):
     result = compute.instances().list(project=project, zone=zone).execute()
@@ -131,7 +135,7 @@ def setupconfig(gcp=False):
     cheifcnt = int()
     chiefsize = 'small'
 
-    askcontinue = input('Installing Brackets...' + Fore.GREEN + 'Do wish to continue? Y|n: ' + Style.RESET_ALL)
+    askcontinue = input('Installing Brackets...' + Fore.GREEN + '\nDo wish to continue? Y|n: ' + Style.RESET_ALL)
     while askcontinue != "Y":
         if askcontinue == "Y":
             pass
@@ -162,8 +166,8 @@ def setupconfig(gcp=False):
     chiefcnt = 0
     while chieftrk == False:
         try:
-            chiefcnt = int(input("How many chiefs/workers are there? [1-20 or more]: "))
-            if 2 <= chiefcnt <= 20:
+            chiefcnt = int(input("How many chiefs/workers are there? [0-20 or more]: "))
+            if 0 <= chiefcnt <= 20:
                 chieftrk = True
         except ValueError:
             print('Error: Numbers Only\n')
@@ -194,7 +198,7 @@ def getconfig():
         
     return config # returns dict
 
-def set_fleet_hosts():
+def set_fleet_hosts(): # Updates hosts file that's not GCP
     all_config = getconfig()
     hwriter = open(temp_hostfile, 'w')
 
@@ -235,7 +239,7 @@ def set_gcp_hosts(brak_name, brak_ssh_iphost): # updates the ansible hosts file
             hwriter.write('[{}]\n'.format('fleetAdmiral'))
         
     # write admiral host
-        admiralstr = 'admiral ansible_host={} ansible_port=22 ansible_user={}\n'.format(brak_ssh_iphost, all_config['ssh_user'])
+        admiralstr = 'admiral ansible_host={} ansible_port=22 ansible_user={}\n\n'.format(brak_ssh_iphost, all_config['ssh_user'])
         hwriter.write(admiralstr)
         
     else: # write chief header
@@ -248,7 +252,6 @@ def set_gcp_hosts(brak_name, brak_ssh_iphost): # updates the ansible hosts file
         hwriter.write('{} ansible_host={} ansible_port=22 ansible_user={}\n'.format(brak_name, brak_ssh_iphost, all_config['ssh_user']))
 
     hwriter.close()
-    os.replace(temp_hostfile, hostsfile)
 
 def buildinstances(project_id, zone, chief_count):
     ''' Build Instances '''
@@ -288,16 +291,51 @@ def update_gcp_hosts(apiconfig):
         brack_name = instance['name']
         access_ip = instance['networkInterfaces'][0]['networkIP']
         nat_ip = instance['networkInterfaces'][0]['accessConfigs'][0]['natIP']
-        set_gcp_hosts(brack_name, access_ip) # write new hosts file
+        set_gcp_hosts(brack_name, nat_ip) # write new hosts file
 
-    print('Updating new brackets hosts file')
-    show_hosts(hostsfile)
-    
     # Moving tempfile to  ansible hostsfile
     os.replace(temp_hostfile, hostsfile)
  
+def ping_hosts():
+    print('\n' + Fore.GREEN + 'Pinging Fleet Now...' + Style.RESET_ALL)
+    status = False
+    ping_cmd = [ ansible_python, '/usr/local/bin/ansible', '-i', hostsfile, 'all', '-m', 'ping']
+    pingit = subprocess.run(ping_cmd, stdout=subprocess.PIPE, text=True)
+    if pingit.returncode == 0:
+        print(Fore.BLUE + "PASS: SSH connectivity to fleet successfull" + Style.RESET_ALL)
+        status = True
+    else:
+        print(Fore.RED + "ERROR: SSH connectivity fleet failed, check your hosts file and try again\n" + Style.RESET_ALL)
+        print(Fore.RED + pingit.stdout + Style.RESET_ALL)
+    
+    return(status)
+
+def standup_fleet():
+    
+    fleet_cmd = [ ansible_python, '/usr/local/bin/ansible-playbook', '-i', hostsfile, './brackets.yml']
+    fleet_deploy = subprocess.Popen(fleet_cmd, text=True, stdout=subprocess.PIPE)
+
+    while True:
+        output = fleet_deploy.stdout.readline()
+        if output == '' and fleet_deploy.poll() is not None:
+            break
+        if output:
+            if output.startswith('ok:'):
+                print(Fore.GREEN + output.strip())
+            elif output.startswith('changed:'):
+                print(Fore.YELLOW + output.strip())
+            elif output.startswith('skipping:'):
+                print(Fore.BLUE + output.strip())
+            elif output.startswith('fatal:'):
+                print(Fore.RED + output.strip() + Style.RESET_ALL)
+            else:
+                print(Style.RESET_ALL + output.strip())
+    print(Style.RESET_ALL)
+    rc = fleet_deploy.poll()
+    return(True)
+        
 def menu_option():
-    max_option=6
+    max_option=8 # should always be +1 of the options below
     options = range(1,max_option)
     selection = int()
 
@@ -305,10 +343,12 @@ def menu_option():
         print()
         print(Fore.GREEN + 'Brackets Menu: Select Option' + Style.RESET_ALL)
         print('  1 - Install Brackets on 1 or more Ubuntu-18 VMs, instances or servers')
-        print('  2 - Install Brackets on GCP from scratch (spin up & install')
+        print('  2 - Install Brackets on GCP from scratch (spin up & install)')
         print('  3 - View active hosts file')
         print('  4 - Update GCP nodes')
-        print('  5 - Exit Now')
+        print('  5 - Check connectivity to fleet')
+        print('  6 - Run playbooks again on fleet')
+        print('  7 - Exit Now')
         print()
         
         selection = int(input(Fore.GREEN + 'Select Option: ' + Style.RESET_ALL))
@@ -338,40 +378,60 @@ def main():
                     if overwrite == 'y':
                         setupconfig()
                         set_fleet_hosts()
-                        
                     apiconfig = getconfig()
                 else:
                     setupconfig()
                     apiconfig = getconfig()
+                standup_fleet()
+
             elif set_option == 2:
                 print("Setup and install on gcp")
                 setupconfig(gcp=True)
                 apiconfig = getconfig()
                 buildinstances(apiconfig['gcp_project_id'], apiconfig['gcp_zone'], apiconfig['chief_number'])
                 update_gcp_hosts(apiconfig)
+                print(Fore.CYAN + "Waiting for fleet to spin up")
+                start_pause = deepcopy(fleet_spinup_pause) 
+                while True:
+                    if start_pause == 0:
+                        break
+                    else:
+                        print(start_pause)
+                        time.sleep(1.2)
+                        start_pause -= 1
+
+                while True:
+                    ping_status = ping_hosts()
+                    if ping_status == True: # Waiting for ping to succeed
+                        standup_fleet()
+                        break
+                    else:
+                        print('Waiting')
+                        time.sleep(10)
+
             elif set_option == 3:
                 show_hosts(hostsfile)
+
             elif set_option == 4:
-                print('Update gcp ansible hosts')
-                #apiconfig = getconfig()
+                print('Update gcp fleet hosts file')
                 update_gcp_hosts(getconfig())
+                show_hosts(hostsfile)
+
             elif set_option == 5:
-                print('Option 5: Exit')
+                ping_hosts()
+
+            elif set_option == 6:
+                fleet_status = standup_fleet()
+
+            elif set_option == 7:
+                print(Fore.GREEN + 'Option 7: Exit' + Style.RESET_ALL)
                 sys.exit()
+
             else:
                 pass
                
     except KeyboardInterrupt:
-        sys.exit('\nExit...')
-
-    sys.exit()
-
-    # Make some instances
-    #buildinstances(apiconfig['gcp_project_id'], apiconfig['gcp_zone'], apiconfig['chief_number'])
-
-    #print('Configure crew via ansible with this command: ')
-    #print('ansible-playbook -i ./hosts/fleet_hosts.ini brackets.yml')
-
+        sys.exit(Fore.GREEN + '\nExit...' + Style.RESET_ALL)
 
 
 if __name__ == '__main__':

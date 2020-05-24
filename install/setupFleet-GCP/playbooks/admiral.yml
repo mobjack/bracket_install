@@ -3,10 +3,10 @@
   vars:
     ansible_python_interpreter: /usr/bin/python3
     admiral_ip: hostvars[inventory_hostname]['ansible_default_ipv4']['address']
+    include_vars: playbooks/bracket_vars.yml
 
   tasks:
-  - name: Set docker login
-    include_vars: vars/bracket_vars.yml
+  #- name: Set docker login
 
   - name: Initialize Docker Swarm
     docker_swarm:
@@ -36,7 +36,7 @@
     become: yes
     become_user: brackets
 
-  - name: Docker Login
-    docker_login:
-    username: " {{ docker_user }}"
-    password: " {{ docker_login }}"
+#  - name: Docker Login
+#    docker_login:
+#    username: " {{ docker_user }}"
+#    password: " {{ docker_login }}"

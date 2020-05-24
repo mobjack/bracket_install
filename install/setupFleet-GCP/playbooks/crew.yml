@@ -56,7 +56,7 @@
     command: pip3 install --upgrade pip
     become: yes
   
-  - name: Instal docker pip package
+  - name: Install docker pip package
     pip: 
       name: docker
     become: yes
