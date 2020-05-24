@@ -1,5 +1,0 @@
----
-- hosts: admiral
-  vars:
-    docker_user: docker_username
-    docker_login: docker_login
