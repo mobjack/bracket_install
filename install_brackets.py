@@ -24,8 +24,11 @@ temp_hostfile = hostsfile + '.temp'
 fleet_spinup_pause = 30
 
 def list_instances(compute, project, zone):
-    result = compute.instances().list(project=project, zone=zone).execute()
-    return result['items']
+    try:
+        result = compute.instances().list(project=project, zone=zone).execute()
+        return result['items']
+    except KeyError:
+        return(None)
 
 def create_instance(compute, project, zone, name, size):
     # Get the latest ubuntu image.
@@ -160,7 +163,7 @@ def setupconfig(gcp=False):
         print('\n')
         zoneis = input("Zone: ")
 
-    print(Fore.GREEN + '\nThis script will configure single admiral and/or several chiefs' + Style.RESET_ALL)
+    print(Fore.GREEN + '\nThis script will configure single admiral and chief(s)' + Style.RESET_ALL)
 
     chieftrk = False
     chiefcnt = 0
@@ -174,14 +177,14 @@ def setupconfig(gcp=False):
 
     config = configparser.ConfigParser()
     if gcp == True:
-        config['admiral'] = {'ssh_user': useris,
+        config['brackets-admiral'] = {'ssh_user': useris,
                             'gcp_project_id': idis,
                             'gcp_zone': zoneis,
                             'chief_number': chiefcnt,
                             'chief_size': chiefsize
                              }
     else:
-        config['admiral'] = {'ssh_user': useris,
+        config['brackets-admiral'] = {'ssh_user': useris,
                             'chief_number': chiefcnt}
 
     with open(configfile, 'w') as cc:
@@ -193,8 +196,8 @@ def getconfig():
     settings.read(configfile)
 
     config = {}
-    for key in settings['admiral']:
-        config.update({key: settings['admiral'][key]})
+    for key in settings['brackets-admiral']:
+        config.update({key: settings['brackets-admiral'][key]})
         
     return config # returns dict
 
@@ -204,7 +207,7 @@ def set_fleet_hosts(): # Updates hosts file that's not GCP
 
     admiral_ip = input(Fore.GREEN + "What IP or Hostname of Admiral: " + Style.RESET_ALL)
     hwriter.write('[{}]\n'.format('fleetAdmiral'))
-    admiralstr = 'admiral ansible_host={} ansible_port=22 ansible_user={}\n'.format(admiral_ip, all_config['ssh_user'])
+    admiralstr = 'brackets-admiral ansible_host={} ansible_port=22 ansible_user={}\n'.format(admiral_ip, all_config['ssh_user'])
     hwriter.write(admiralstr)
     hwriter.write('\n')
 
@@ -239,7 +242,7 @@ def set_gcp_hosts(brak_name, brak_ssh_iphost): # updates the ansible hosts file
             hwriter.write('[{}]\n'.format('fleetAdmiral'))
         
     # write admiral host
-        admiralstr = 'admiral ansible_host={} ansible_port=22 ansible_user={}\n\n'.format(brak_ssh_iphost, all_config['ssh_user'])
+        admiralstr = 'brackets-admiral ansible_host={} ansible_port=22 ansible_user={}\n\n'.format(brak_ssh_iphost, all_config['ssh_user'])
         hwriter.write(admiralstr)
         
     else: # write chief header
@@ -281,6 +284,9 @@ def update_gcp_hosts(apiconfig):
     current_inst = list_instances(compute,apiconfig['gcp_project_id'],apiconfig['gcp_zone'])
     
     # Skip any non brackets instances
+    if current_inst == None:
+        print(Fore.RED + 'Error: No GCP instances found, skipping update of hosts file' + Style.RESET_ALL)
+        return(None)
     for instance in current_inst:
         if instance['name'].startswith('brackets-'):
             pass

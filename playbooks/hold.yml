@@ -1,0 +1,26 @@
+---
+    #
+    # This file contains the standard configs across all 
+    # systems that are managed.
+    #
+    
+- hosts: all
+  tasks:
+
+  - name: Set hold mount dir
+    file:
+      path: /mnt/db/
+      state: directory 
+      owner: brackets
+      group: docker
+    become: yes
+
+  - name: Mount gluster fs
+    mount:
+      path: /mnt/db
+      src: localhost:bracket_db
+      fstype: glusterfs
+      opts: defaults,_netdev,backupvolfile-server=localhost
+      state: mounted
+    become: yes
+   

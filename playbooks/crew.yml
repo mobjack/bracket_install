@@ -13,7 +13,7 @@
       upgrade: yes
       update_cache: yes
       cache_valid_time: 86400 #One day
-    run_once: yes
+    #run_once: yes
 
   - name: Add Docker GPG key
     apt_key: url=https://download.docker.com/linux/ubuntu/gpg
@@ -23,9 +23,14 @@
     apt_repository:
       repo: deb [arch=amd64] https://download.docker.com/linux/{{ansible_distribution|lower}} {{ansible_distribution_release}} stable
     become: yes
+  
+  - name: Add GlusterFS Repo
+    apt_repository:
+      repo: ppa:gluster/glusterfs-3.12
+    become: yes
 
   # Install standard packages here
-  - name: Installing standard packages?
+  - name: Installing standard packages
     apt: 
       pkg: 
         - build-essential
@@ -38,12 +43,8 @@
         - curl
         - openssl
         - software-properties-common
+        - glusterfs-server
     become: yes
-
-  - name: Check Python version
-    shell: /usr/bin/python3 -V
-    register: python3_version
-    ignore_errors: yes  # If not installed
 
   - name: Install Python If Not Present
     apt:
@@ -99,4 +100,27 @@
       state: directory 
       owner: brackets
       group: brackets
+    become: yes
+
+  - name: Set DB1 Dir
+    file:
+      path: /bricks/brick1/db
+      state: directory 
+      owner: root
+      group: brackets
+    become: yes
+
+  - name: Set DB2 Dir
+    file:
+      path: /bricks/brick2/db
+      state: directory 
+      owner: root
+      group: brackets
+    become: yes
+
+  - name: enable glusterd
+    systemd:
+      name: glusterd
+      enabled: yes
+      state: started
     become: yes

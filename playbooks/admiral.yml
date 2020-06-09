@@ -1,13 +1,11 @@
 ---
-- hosts: admiral
+- hosts: brackets-admiral
   vars:
     ansible_python_interpreter: /usr/bin/python3
     admiral_ip: hostvars[inventory_hostname]['ansible_default_ipv4']['address']
     include_vars: playbooks/bracket_vars.yml
 
   tasks:
-  #- name: Set docker login
-
   - name: Initialize Docker Swarm
     docker_swarm:
       state: present
@@ -35,8 +33,24 @@
       remote_addrs: [ "{{ docker_swarm_ip }}" ]
     become: yes
     become_user: brackets
+ 
+  - name: create gluster db volume
+    gluster_volume:
+      name: bracket_db
+      bricks: /bricks/brick1/db,/bricks/brick2/db
+      rebalance: yes
+      replicas: 3
+      cluster: "{{ groups['fleetChiefs'] | join(',') }}"
+      force: true
+      state: present
+    run_once: true
+    retries: 3
+    delay: 5
+    become: yes
 
-#  - name: Docker Login
-#    docker_login:
-#    username: " {{ docker_user }}"
-#    password: " {{ docker_login }}"
+  - name: start gluster 
+    gluster_volume:
+      name: bracket_db
+      state: started
+    become: yes
+ 

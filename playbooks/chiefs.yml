@@ -1,6 +1,6 @@
 ---
 
-- hosts: admiral
+- hosts: brackets-admiral
   vars:
     ansible_python_interpreter: /usr/bin/python3
 
@@ -36,5 +36,5 @@
       advertise_addr: "{{ chief_ip_var }}"
       join_token: "{{ get_docker_key }}"
       remote_addrs: [ "{{ get_docker_ip }}" ]
-  become: yes
-  become_user: brackets
+    become: yes
+    become_user: brackets

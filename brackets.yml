@@ -10,3 +10,6 @@
 
 - name: Setup Chiefs
   import_playbook: playbooks/chiefs.yml
+
+- name: Setup Volumes
+  import_playbook: playbooks/hold.yml
