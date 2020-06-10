@@ -13,6 +13,7 @@
       state: directory 
       owner: brackets
       group: docker
+      mode: u+rwx,g+rwx,o+rx
     become: yes
 
   - name: Mount gluster fs
