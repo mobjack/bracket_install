@@ -43,11 +43,24 @@
       cluster: "{{ groups['fleetChiefs'] | join(',') }}"
       force: true
       state: present
-    run_once: true
-    retries: 3
-    delay: 5
+    ignore_errors: yes  
     become: yes
+  
+  - name: waiting 2min for gluster to settle
+    pause:
+      minutes: 2
 
+  - name: Set gluster db volume again
+    gluster_volume:
+      name: bracket_db
+      bricks: /bricks/brick1/db,/bricks/brick2/db
+      rebalance: yes
+      replicas: 3
+      cluster: "{{ groups['fleetChiefs'] | join(',') }}"
+      force: true
+      state: present
+    become: yes
+ 
   - name: start gluster 
     gluster_volume:
       name: bracket_db
