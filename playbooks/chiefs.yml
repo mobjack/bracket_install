@@ -26,8 +26,8 @@
   vars:
     ansible_python_interpreter: /usr/bin/python3
     chief_ip_var: hostvars[inventory_hostname]['ansible_default_ipv4']['address']
-    get_docker_key: "{{ hostvars['admiral']['docker_swarm_key'] }}"
-    get_docker_ip: "{{ hostvars['admiral']['docker_swarm_ip'] }}"
+    get_docker_key: "{{ hostvars['brackets-admiral']['docker_swarm_key'] }}"
+    get_docker_ip: "{{ hostvars['brackets-admiral']['docker_swarm_ip'] }}"
 
   tasks:
   - name: Join chief to swarm cluster as a worker
