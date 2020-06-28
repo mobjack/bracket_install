@@ -1,0 +1,18 @@
+version: '3'
+services:
+
+  local-syslog:
+    hostname: local-syslog
+    image: mobjack/brackets:local-syslog
+    ports:
+      - '8514:8514'
+      - '8514:8514/udp'
+    working_dir: /root
+
+networks:
+  default:
+    external:
+      name: bracketapp
+
+volumes:
+  db-data:

@@ -4,12 +4,10 @@
     ansible_python_interpreter: /usr/bin/python3
     admiral_ip: hostvars[inventory_hostname]['ansible_default_ipv4']['address']
     gluster_replicas: "{{ lookup('ini', 'chief_number section=brackets-admiral file=../hosts/fleet_setup.ini') }}"
+    thehub: "{{ lookup('ini', 'thehub section=brackets-admiral file=../hosts/fleet_setup.ini') }}"
     include_vars: playbooks/bracket_vars.yml
 
   tasks:
-  - name: Debug gluster Var
-    debug:
-      msg: "{{ gluster_replicas }} "
   - name: Initialize Docker Swarm
     docker_swarm:
       state: present
@@ -37,8 +35,33 @@
       remote_addrs: [ "{{ docker_swarm_ip }}" ]
     become: yes
     become_user: brackets
+
+  - name: Download docker images 
+    docker_image:
+      name: mobjack/brackets:local-syslog
+      source: pull
+    
+  - name: Copy compose file to admiral
+    copy:
+      src: docker-compose.yml
+      dest: /opt/brackets/
+      owner: brackets
+      group: brackets
+      mode: '0644'
+    become: yes
+    become_user: brackets
+    
+  - name: Delete a network, disconnecting all containers
+    docker_network:
+      name: brackets
+      state: absent
+      force: yes
+      
+  - name: Create Brackets docker network
+    docker_network:
+        name: bracketapp
  
-  - name: create gluster db volume
+  - name: Create gluster db volume
     gluster_volume:
       name: bracket_db
       bricks: /bricks/brick1/db,/bricks/brick2/db
