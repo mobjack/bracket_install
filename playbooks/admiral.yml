@@ -3,9 +3,13 @@
   vars:
     ansible_python_interpreter: /usr/bin/python3
     admiral_ip: hostvars[inventory_hostname]['ansible_default_ipv4']['address']
+    gluster_replicas: "{{ lookup('ini', 'chief_number section=brackets-admiral file=../hosts/fleet_setup.ini') }}"
     include_vars: playbooks/bracket_vars.yml
 
   tasks:
+  - name: Debug gluster Var
+    debug:
+      msg: "{{ gluster_replicas }} "
   - name: Initialize Docker Swarm
     docker_swarm:
       state: present
@@ -39,7 +43,7 @@
       name: bracket_db
       bricks: /bricks/brick1/db,/bricks/brick2/db
       rebalance: yes
-      replicas: 3
+      replicas: "{{ gluster_replicas }}"
       cluster: "{{ groups['fleetChiefs'] | join(',') }}"
       force: true
       state: present
@@ -55,7 +59,7 @@
       name: bracket_db
       bricks: /bricks/brick1/db,/bricks/brick2/db
       rebalance: yes
-      replicas: 3
+      replicas: "{{ gluster_replicas }}"
       cluster: "{{ groups['fleetChiefs'] | join(',') }}"
       force: true
       state: present

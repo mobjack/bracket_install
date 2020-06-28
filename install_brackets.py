@@ -6,6 +6,7 @@ import json
 import argparse
 import fileinput
 import subprocess
+import platform
 import configparser
 
 from copy import deepcopy
@@ -19,9 +20,21 @@ gcpzones = ['us-west1-a','us-west1-b','us-central1-b','us-central1-c','us-centra
 
 configfile = './hosts/fleet_setup.ini'
 hostsfile = './hosts/fleet_hosts.ini'
-ansible_python = '/usr/bin/python3' # Ansible is python too and needs the system python not venv
 temp_hostfile = hostsfile + '.temp'
 fleet_spinup_pause = 30
+
+# Set Proper Ansible
+if platform.system() == 'Linux': 
+    ansible_python = '/usr/bin/python3' # Ansible is python too and needs the system python not venv
+    ansible_cmd = '/usr/bin/ansible'
+    ansible_play = '/usr/bin/ansible-playbook'
+elif platform.system() == 'Darwin': # Darwin = Mac
+    ansible_python = '/usr/local/bin/python3' 
+    ansible_cmd = '/usr/local/bin/ansible'
+    ansible_play = '/usr/local/bin/ansible-playbook'
+else:
+    raise OSError("\nError: Unknown OS this install only runs on Ubuntu 18 Linux or Mac")
+
 
 def list_instances(compute, project, zone):
     try:
@@ -305,7 +318,7 @@ def update_gcp_hosts(apiconfig):
 def ping_hosts():
     print('\n' + Fore.GREEN + 'Pinging Fleet Now...' + Style.RESET_ALL)
     status = False
-    ping_cmd = [ ansible_python, '/usr/local/bin/ansible', '-i', hostsfile, 'all', '-m', 'ping']
+    ping_cmd = [ ansible_python, ansible_cmd, '-i', hostsfile, 'all', '-m', 'ping']
     pingit = subprocess.run(ping_cmd, stdout=subprocess.PIPE, text=True)
     if pingit.returncode == 0:
         print(Fore.BLUE + "PASS: SSH connectivity to fleet successfull" + Style.RESET_ALL)
@@ -318,7 +331,7 @@ def ping_hosts():
 
 def standup_fleet():
     
-    fleet_cmd = [ ansible_python, '/usr/local/bin/ansible-playbook', '-i', hostsfile, './brackets.yml']
+    fleet_cmd = [ ansible_python, ansible_play, '-i', hostsfile, './brackets.yml']
     fleet_deploy = subprocess.Popen(fleet_cmd, text=True, stdout=subprocess.PIPE)
 
     while True:

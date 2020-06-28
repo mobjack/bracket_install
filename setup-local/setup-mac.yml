@@ -4,15 +4,10 @@
     connection: local
     tasks:
 
-    - name: Setup Docker Network
-      docker_network:
-        name: bracket_install
-      tags:
-        - network
+    - name: "Install Packages"
+      apt:
+        name: [ 'ansible'
+                ]
+        state: present
+        update_cache: yes
 
-    - name: Build Install API
-      docker_image:
-        name: brackets:ingest-api
-        build:
-          path: ../services/ingest-api
-        source: build
