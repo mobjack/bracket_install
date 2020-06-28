@@ -176,6 +176,18 @@ def setupconfig(gcp=False):
         print('\n')
         zoneis = input("Zone: ")
 
+        use_nat = ""
+        while True:
+            use_nat = input('Do you use the GCP nat ip to connect to vm instances? y|n: ')
+            if use_nat in ['y', 'n']:
+                break
+        if use_nat == 'y':
+            ssh_nat = "yes"
+        else:
+            ssh_nat = "no"
+
+            
+
     print(Fore.GREEN + '\nThis script will configure single admiral and chief(s)' + Style.RESET_ALL)
 
     chieftrk = False
@@ -194,7 +206,8 @@ def setupconfig(gcp=False):
                             'gcp_project_id': idis,
                             'gcp_zone': zoneis,
                             'chief_number': chiefcnt,
-                            'chief_size': chiefsize
+                            'chief_size': chiefsize,
+                            'ssh_to_nat': ssh_nat
                              }
     else:
         config['brackets-admiral'] = {'ssh_user': useris,
@@ -295,6 +308,8 @@ def update_gcp_hosts(apiconfig):
     ### Query Inventory & Fix Hosts File With IP ###
     compute = googleapiclient.discovery.build('compute', 'v1')
     current_inst = list_instances(compute,apiconfig['gcp_project_id'],apiconfig['gcp_zone'])
+    current_config = getconfig()
+    ssh_nat_status = current_config['ssh_to_nat']
     
     # Skip any non brackets instances
     if current_inst == None:
@@ -308,9 +323,12 @@ def update_gcp_hosts(apiconfig):
 
         # Get name, external nat, if there is not external nat use the internal ip
         brack_name = instance['name']
-        access_ip = instance['networkInterfaces'][0]['networkIP']
-        nat_ip = instance['networkInterfaces'][0]['accessConfigs'][0]['natIP']
-        set_gcp_hosts(brack_name, nat_ip) # write new hosts file
+        if ssh_nat_status == 'yes': # use the nat ip
+            access_ip = instance['networkInterfaces'][0]['accessConfigs'][0]['natIP']
+        else: # Use the 1918 IP
+            access_ip = instance['networkInterfaces'][0]['networkIP']
+
+        set_gcp_hosts(brack_name, access_ip) # write new hosts file
 
     # Moving tempfile to  ansible hostsfile
     os.replace(temp_hostfile, hostsfile)
