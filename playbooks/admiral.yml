@@ -4,7 +4,8 @@
     ansible_python_interpreter: /usr/bin/python3
     admiral_ip: hostvars[inventory_hostname]['ansible_default_ipv4']['address']
     gluster_replicas: "{{ lookup('ini', 'chief_number section=brackets-admiral file=../hosts/fleet_setup.ini') }}"
-    thehub: "{{ lookup('ini', 'thehub section=brackets-admiral file=../hosts/fleet_setup.ini') }}"
+    dockeruser: "{{ lookup('ini', 'dockeruser section=docker file=../hosts/.docker.ini') }}"
+    dockerauth: "{{ lookup('ini', 'dockerauth section=docker file=../hosts/.docker.ini') }}"
     include_vars: playbooks/bracket_vars.yml
 
   tasks:
@@ -36,10 +37,18 @@
     become: yes
     become_user: brackets
 
+  - name: Log into DockerHub
+    docker_login:
+      username:  "{{ dockeruser }}"
+      password: "{{ dockerauth }}"
+
   - name: Download docker images 
     docker_image:
-      name: mobjack/brackets:local-syslog
+      name: "{{ item }}"
       source: pull
+    loop: 
+      - mobjack/brackets:local-syslog
+      - mobjack/brackets:postgres
     
   - name: Copy compose file to admiral
     copy:

@@ -10,6 +10,7 @@ import platform
 import configparser
 
 from copy import deepcopy
+from getpass import getpass
 import googleapiclient.discovery
 from colorama import Fore, Back, Style
 #from six.moves import input
@@ -20,6 +21,7 @@ gcpzones = ['us-west1-a','us-west1-b','us-central1-b','us-central1-c','us-centra
 
 configfile = './hosts/fleet_setup.ini'
 hostsfile = './hosts/fleet_hosts.ini'
+dockerfile = './hosts/.docker.ini'
 temp_hostfile = hostsfile + '.temp'
 fleet_spinup_pause = 30
 
@@ -211,7 +213,8 @@ def setupconfig(gcp=False):
                              }
     else:
         config['brackets-admiral'] = {'ssh_user': useris,
-                            'chief_number': chiefcnt}
+                                      'chief_number': chiefcnt
+                                      }
 
     with open(configfile, 'w') as cc:
         config.write(cc)
@@ -347,8 +350,33 @@ def ping_hosts():
     
     return(status)
 
+def setdocker_login():
+    ''' Docker hub login '''
+    dokfile = configparser.ConfigParser() 
+    dokfile.add_section('docker')
+    while True:
+        print(Fore.GREEN + "You will need access to the docker hub repo enter your credentials: ")
+        dockeruser = input("  Dockerhub Username: ")
+        dockerauth = getpass("  Dockerhub Password or Auth Key (hidden): ")
+        print("" + Style.RESET_ALL)
+
+        docker_ok = input("Docker login details accepted, continue? Select n to try again: y|n: ")
+        if docker_ok in ['y', 'Y']:
+            break
+        else:
+            continue    
+  
+    dokfile.set('docker', 'dockeruser', dockeruser)
+    dokfile.set('docker', 'dockerauth', dockerauth)
+
+    with open(dockerfile, 'w') as df:
+        dokfile.write(df)
+
+def cleardocker():
+    if os.path.isfile(dockerfile):
+        os.remove(dockerfile)
+
 def standup_fleet():
-    
     fleet_cmd = [ ansible_python, ansible_play, '-i', hostsfile, './brackets.yml']
     fleet_deploy = subprocess.Popen(fleet_cmd, text=True, stdout=subprocess.PIPE)
 
@@ -424,6 +452,7 @@ def main():
             elif set_option == 2:
                 print("Setup and install on gcp")
                 setupconfig(gcp=True)
+                setdocker_login()
                 apiconfig = getconfig()
                 buildinstances(apiconfig['gcp_project_id'], apiconfig['gcp_zone'], apiconfig['chief_number'])
                 update_gcp_hosts(apiconfig)
@@ -462,15 +491,18 @@ def main():
 
             elif set_option == 7:
                 print(Fore.GREEN + 'Option 7: Exit' + Style.RESET_ALL)
+                cleardocker()
                 sys.exit()
 
             else:
                 pass
                
     except KeyboardInterrupt:
+        cleardocker()
         sys.exit(Fore.GREEN + '\nExit...' + Style.RESET_ALL)
 
 
 if __name__ == '__main__':
+    cleardocker()
     main()
 
